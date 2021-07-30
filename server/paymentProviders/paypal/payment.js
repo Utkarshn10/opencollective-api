@@ -117,15 +117,6 @@ const recordTransaction = async (order, amount, currency, paypalFee, payload) =>
   });
 };
 
-export async function createTransaction(order, paymentInfo) {
-  const transaction = paymentInfo.transactions[0];
-  const currency = transaction.amount.currency;
-  const amount = paypalAmountToCents(transaction.amount.total);
-  const paypalTransactionFee = parseFloat(get(transaction, 'related_resources.0.sale.transaction_fee.value', '0.0'));
-  const paymentProcessorFee = floatAmountToCents(paypalTransactionFee);
-  return recordTransaction(order, amount, currency, paymentProcessorFee, paymentInfo);
-}
-
 export function recordPaypalSale(order, paypalSale) {
   const currency = paypalSale.amount.currency;
   const amount = paypalAmountToCents(paypalSale.amount.total);
@@ -196,20 +187,10 @@ export const refundPaypalCapture = async (transaction, captureId, user, reason) 
 
 /** Process order in paypal and create transactions in our db */
 export async function processOrder(order) {
-  if (order.paymentMethod.data?.isNewApi) {
-    if (order.paymentMethod.data.orderId) {
-      return processPaypalOrder(order, order.paymentMethod.data.orderId);
-    } else {
-      throw new Error('Must provide an orderId');
-    }
+  if (order.paymentMethod.data.orderId) {
+    return processPaypalOrder(order, order.paymentMethod.data.orderId);
   } else {
-    const paymentInfo = await executePayment(order);
-    logger.info('PayPal Payment');
-    logger.info(paymentInfo);
-    const transaction = await createTransaction(order, paymentInfo);
-    await order.update({ processedAt: new Date() });
-    await order.paymentMethod.update({ confirmedAt: new Date() });
-    return transaction;
+    throw new Error('Must provide an orderId');
   }
 }
 
