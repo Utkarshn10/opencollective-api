@@ -97,7 +97,7 @@ export const processOrder = async order => {
   const cryptoToFiatFxRate = await getFxRate(order.data.customData.pledgeCurrency, order.currency);
   if (cryptoToFiatFxRate) {
     const totalAmount = Math.round(order.data.customData.pledgeAmount * cryptoToFiatFxRate);
-    await order.update({ totalAmount });
+    await order.update({ totalAmount, status: orderStatus.PENDING });
   }
 };
 
