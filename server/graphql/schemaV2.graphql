@@ -2800,12 +2800,14 @@ type Credit implements Transaction {
   id: String!
   legacyId: Int!
   uuid: String
+  group: String
   type: TransactionType
   kind: TransactionKind
   description: String
   amount: Amount!
   amountInHostCurrency: Amount!
   netAmount: Amount!
+  netAmountInHostCurrency: Amount!
   taxAmount: Amount!
 
   """
@@ -2814,8 +2816,22 @@ type Credit implements Transaction {
   taxInfo: TaxInfo
   platformFee: Amount!
   hostFee: Amount!
+
+  """
+  Payment Processor Fee (usually in host currency)
+  """
   paymentProcessorFee: Amount!
   host: Account
+
+  """
+  The account on the main side of the transaction (CREDIT -> recipient, DEBIT -> sender)
+  """
+  account: Account
+
+  """
+  The account on the opposite side of the transaction (CREDIT -> sender, DEBIT -> recipient)
+  """
+  oppositeAccount: Account
   createdAt: DateTime
   updatedAt: DateTime
   expense: Expense
@@ -3054,12 +3070,14 @@ type Debit implements Transaction {
   id: String!
   legacyId: Int!
   uuid: String
+  group: String
   type: TransactionType
   kind: TransactionKind
   description: String
   amount: Amount!
   amountInHostCurrency: Amount!
   netAmount: Amount!
+  netAmountInHostCurrency: Amount!
   taxAmount: Amount!
 
   """
@@ -3068,8 +3086,22 @@ type Debit implements Transaction {
   taxInfo: TaxInfo
   platformFee: Amount!
   hostFee: Amount!
+
+  """
+  Payment Processor Fee (usually in host currency)
+  """
   paymentProcessorFee: Amount!
   host: Account
+
+  """
+  The account on the main side of the transaction (CREDIT -> recipient, DEBIT -> sender)
+  """
+  account: Account
+
+  """
+  The account on the opposite side of the transaction (CREDIT -> sender, DEBIT -> recipient)
+  """
+  oppositeAccount: Account
   createdAt: DateTime
   updatedAt: DateTime
   expense: Expense
@@ -6973,6 +7005,7 @@ enum PaymentMethodLegacyType {
   PREPAID_BUDGET
   ACCOUNT_BALANCE
   PAYPAL
+  PAYPAL_SUBSCRIPTION
   BANK_TRANSFER
   ADDED_FUNDS
   CRYPTO
@@ -7795,22 +7828,23 @@ type Query {
     type: TransactionType
 
     """
-    Reference of the account that submitted this expense
+    Reference of the account assigned to the other side of the transaction
+    (CREDIT -> sender, DEBIT -> recipient). Avoid, favor account instead.
     """
     fromAccount: AccountReferenceInput
 
     """
-    Reference of the account where this expense was submitted
+    Reference of the account assigned to the main side of the transaction (CREDIT -> recipient, DEBIT -> sender)
     """
     account: AccountReferenceInput
 
     """
-    Reference of the host where this expense was submitted
+    Reference of the host accounting the transaction
     """
     host: AccountReferenceInput
 
     """
-    Only expenses that match these tags
+    NOT IMPLEMENTED. Only return transactions that match these tags.
     """
     tags: [String]
 
@@ -7820,22 +7854,22 @@ type Query {
     orderBy: ChronologicalOrderInput! = { field: CREATED_AT, direction: DESC }
 
     """
-    Only return expenses where the amount is greater than or equal to this value (in cents)
+    Only return transactions where the amount is greater than or equal to this value (in cents)
     """
     minAmount: Int
 
     """
-    Only return expenses where the amount is lower than or equal to this value (in cents)
+    Only return transactions where the amount is lower than or equal to this value (in cents)
     """
     maxAmount: Int
 
     """
-    Only return expenses that were created after this date
+    Only return transactions that were created after this date
     """
     dateFrom: DateTime
 
     """
-    Only return expenses that were created before this date
+    Only return transactions that were created before this date
     """
     dateTo: DateTime
 
@@ -7845,12 +7879,12 @@ type Query {
     searchTerm: String
 
     """
-    Transaction is attached to Expense
+    Only return transactions with an Expense attached
     """
     hasExpense: Boolean
 
     """
-    Transaction is attached to Order
+    Only return transactions with an Order attached
     """
     hasOrder: Boolean
 
@@ -8032,12 +8066,14 @@ interface Transaction {
   id: String!
   legacyId: Int!
   uuid: String
+  group: String
   type: TransactionType
   kind: TransactionKind
   description: String
   amount: Amount!
   amountInHostCurrency: Amount!
   netAmount: Amount!
+  netAmountInHostCurrency: Amount!
   taxAmount: Amount!
 
   """
@@ -8048,7 +8084,17 @@ interface Transaction {
   hostFee: Amount
   paymentProcessorFee: Amount
   host: Account
+  account: Account
+  oppositeAccount: Account
+
+  """
+  The recipient of a transaction (on CREDIT = account, DEBIT = toAccount)
+  """
   fromAccount: Account
+
+  """
+  The sender of a transaction  (on CREDIT = toAccount, DEBIT = account)
+  """
   toAccount: Account
   giftCardEmitterAccount: Account
   createdAt: DateTime

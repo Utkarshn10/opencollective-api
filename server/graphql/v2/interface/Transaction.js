@@ -64,6 +64,9 @@ export const Transaction = new GraphQLInterfaceType({
       uuid: {
         type: GraphQLString,
       },
+      group: {
+        type: GraphQLString,
+      },
       type: {
         type: TransactionType,
       },
@@ -80,6 +83,9 @@ export const Transaction = new GraphQLInterfaceType({
         type: new GraphQLNonNull(Amount),
       },
       netAmount: {
+        type: new GraphQLNonNull(Amount),
+      },
+      netAmountInHostCurrency: {
         type: new GraphQLNonNull(Amount),
       },
       taxAmount: {
@@ -101,11 +107,19 @@ export const Transaction = new GraphQLInterfaceType({
       host: {
         type: Account,
       },
+      account: {
+        type: Account,
+      },
+      oppositeAccount: {
+        type: Account,
+      },
       fromAccount: {
         type: Account,
+        description: 'The recipient of a transaction (on CREDIT = account, DEBIT = toAccount)',
       },
       toAccount: {
         type: Account,
+        description: 'The sender of a transaction  (on CREDIT = toAccount, DEBIT = account)',
       },
       giftCardEmitterAccount: {
         type: Account,
@@ -170,6 +184,12 @@ export const TransactionFields = () => {
     uuid: {
       type: GraphQLString,
     },
+    group: {
+      type: GraphQLString,
+      resolve(transaction) {
+        return transaction.TransactionGroup;
+      },
+    },
     type: {
       type: TransactionType,
       resolve(transaction) {
@@ -184,7 +204,40 @@ export const TransactionFields = () => {
     },
     description: {
       type: GraphQLString,
-      resolve(transaction) {
+      async resolve(transaction, _, req) {
+        if (transaction.kind === 'CONTRIBUTION') {
+          let order, subscription, tier, baseString;
+          let tierString = '';
+          if (transaction.OrderId) {
+            order = await req.loaders.Order.byId.load(transaction.OrderId);
+          }
+          if (order && order.SubscriptionId) {
+            subscription = await req.loaders.Subscription.byId.load(order.SubscriptionId);
+          }
+          if (order && order.TierId) {
+            tier = await req.loaders.Tier.byId.load(order.TierId);
+          }
+
+          if (subscription && subscription.interval === 'month') {
+            baseString = `Monthly financial contribution`;
+          } else if (subscription && subscription.interval === 'year') {
+            baseString = `Yearly financial contribution`;
+          } else {
+            baseString = `Financial contribution`;
+          }
+
+          if (tier) {
+            tierString = ` (${tier.name})`;
+          }
+
+          const oppositeAccount = await req.loaders.Collective.byId.load(transaction.FromCollectiveId);
+          if (transaction.type === 'DEBIT') {
+            return `${baseString} to ${oppositeAccount.name}${tierString}`;
+          } else if (transaction.type === 'CREDIT') {
+            return `${baseString} from ${oppositeAccount.name}${tierString}`;
+          }
+        }
+
         return transaction.description;
       },
     },
@@ -206,6 +259,15 @@ export const TransactionFields = () => {
         return {
           value: transaction.netAmountInCollectiveCurrency,
           currency: transaction.currency,
+        };
+      },
+    },
+    netAmountInHostCurrency: {
+      type: new GraphQLNonNull(Amount),
+      resolve(transaction) {
+        return {
+          value: transaction.netAmountInHostCurrency,
+          currency: transaction.hostCurrency,
         };
       },
     },
@@ -249,6 +311,7 @@ export const TransactionFields = () => {
     },
     paymentProcessorFee: {
       type: new GraphQLNonNull(Amount),
+      description: 'Payment Processor Fee (usually in host currency)',
       resolve(transaction) {
         return {
           value: transaction.paymentProcessorFeeInHostCurrency || 0,
@@ -264,6 +327,20 @@ export const TransactionFields = () => {
         } else {
           return null;
         }
+      },
+    },
+    account: {
+      type: Account,
+      description: 'The account on the main side of the transaction (CREDIT -> recipient, DEBIT -> sender)',
+      resolve(transaction, _, req) {
+        return req.loaders.Collective.byId.load(transaction.CollectiveId);
+      },
+    },
+    oppositeAccount: {
+      type: Account,
+      description: 'The account on the opposite side of the transaction (CREDIT -> sender, DEBIT -> recipient)',
+      resolve(transaction, _, req) {
+        return req.loaders.Collective.byId.load(transaction.FromCollectiveId);
       },
     },
     createdAt: {
@@ -302,7 +379,7 @@ export const TransactionFields = () => {
     isRefunded: {
       type: GraphQLBoolean,
       resolve(transaction) {
-        return transaction.RefundTransactionId !== null;
+        return transaction.isRefund !== true && transaction.RefundTransactionId !== null;
       },
     },
     isRefund: {
